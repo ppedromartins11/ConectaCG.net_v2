@@ -1,0 +1,307 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  address   String?
+  role      Role     @default(USER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reviews       Review[]
+  profile       UserProfile?
+  favorites     Favorite[]
+  searchHistory SearchHistory[]
+  priceAlerts   PriceAlert[]
+  events        Event[]
+  badges        UserBadge[]
+  referralsMade Referral[]     @relation("referrer")
+  referralUsed  Referral?      @relation("referred")
+  leads         Lead[]
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+  PROVIDER
+}
+
+model Provider {
+  id    String  @id @default(cuid())
+  name  String
+  logo  String?
+  color String?
+  slug  String  @unique
+
+  plans Plan[]
+
+  @@map("providers")
+}
+
+model Plan {
+  id               String   @id @default(cuid())
+  name             String
+  providerId       String
+  downloadSpeed    Int
+  uploadSpeed      Int
+  price            Float
+  fidelidade       Int      @default(12)
+  capacidade       String?
+  servicosInclusos String[]
+  indicadoPara     String[]
+  categorias       String[]
+  cepsAtendidos    String[]
+
+  isSponsored        Boolean   @default(false)
+  sponsorPriority    Int       @default(0)
+  promotionPrice     Float?
+  promotionExpiresAt DateTime?
+  promotionLabel     String?
+  monthlyFee         Float?
+
+  clickCount      Int   @default(0)
+  conversionCount Int   @default(0)
+  viewCount       Int   @default(0)
+  rankingScore    Float @default(0)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  provider     Provider         @relation(fields: [providerId], references: [id])
+  reviews      Review[]
+  favorites    Favorite[]
+  priceAlerts  PriceAlert[]
+  priceHistory PriceSnapshot[]
+  leads        Lead[]
+  clicks       PlanClick[]
+  conversions  PlanConversion[]
+
+  @@map("plans")
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  userId     String
+  planId     String
+  nota       Int
+  comentario String
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@unique([userId, planId])
+  @@map("reviews")
+}
+
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  pessoas         Int?
+  dispositivos    String[]
+  atividades      String[]
+  velocidadeAtual Int?
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("user_profiles")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  planId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, planId])
+  @@map("favorites")
+}
+
+model SearchHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  cep          String
+  resultsCount Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("search_history")
+}
+
+model PriceAlert {
+  id              String    @id @default(cuid())
+  userId          String
+  planId          String?
+  cep             String
+  minSpeed        Int?
+  maxPrice        Float
+  isActive        Boolean   @default(true)
+  lastTriggeredAt DateTime?
+  createdAt       DateTime  @default(now())
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@map("price_alerts")
+}
+
+model PriceSnapshot {
+  id         String   @id @default(cuid())
+  planId     String
+  price      Float
+  capturedAt DateTime @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, capturedAt])
+  @@map("price_snapshots")
+}
+
+model Lead {
+  id                 String     @id @default(cuid())
+  userId             String?
+  planId             String
+  name               String
+  phone              String
+  cep                String
+  status             LeadStatus @default(NEW)
+  providerNotifiedAt DateTime?
+  createdAt          DateTime   @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  plan Plan  @relation(fields: [planId], references: [id])
+
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  LOST
+}
+
+model PlanClick {
+  id        String   @id @default(cuid())
+  planId    String
+  userId    String?
+  sessionId String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, createdAt])
+  @@map("plan_clicks")
+}
+
+model PlanConversion {
+  id        String   @id @default(cuid())
+  planId    String
+  userId    String?
+  value     Float?
+  createdAt DateTime @default(now())
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("plan_conversions")
+}
+
+model Event {
+  id        String    @id @default(cuid())
+  userId    String?
+  sessionId String?
+  type      EventType
+  payload   Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([userId, createdAt])
+  @@map("events")
+}
+
+enum EventType {
+  PAGE_VIEW
+  CEP_SEARCHED
+  PLAN_VIEWED
+  PLAN_DETAIL_OPENED
+  PLAN_CLICKED
+  COMPARISON_STARTED
+  CTA_LOGIN_SHOWN
+  SIGNUP_STARTED
+  SIGNUP_COMPLETED
+  LOGIN
+  QUESTIONNAIRE_STARTED
+  QUESTIONNAIRE_COMPLETED
+  FAVORITE_ADDED
+  FAVORITE_REMOVED
+  LEAD_CAPTURED
+  HIRE_CLICKED
+  ALERT_CREATED
+  REVIEW_PUBLISHED
+}
+
+model UserBadge {
+  id       String    @id @default(cuid())
+  userId   String
+  slug     BadgeSlug
+  earnedAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, slug])
+  @@map("user_badges")
+}
+
+enum BadgeSlug {
+  EXPLORER
+  REVIEWER
+  SPECIALIST
+  AMBASSADOR
+  EARLY_ADOPTER
+}
+
+model Referral {
+  id         String         @id @default(cuid())
+  referrerId String
+  referredId String         @unique
+  status     ReferralStatus @default(PENDING)
+  rewardedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  referrer User @relation("referrer", fields: [referrerId], references: [id])
+  referred User @relation("referred", fields: [referredId], references: [id])
+
+  @@map("referrals")
+}
+
+enum ReferralStatus {
+  PENDING
+  COMPLETED
+  REWARDED
+}
